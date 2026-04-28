@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Subjective Illusion - Max View</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    /* モバイル向けのスライダースタイル調整 */
+    input[type=range]::-webkit-slider-thumb {
+      width: 28px;
+      height: 28px;
+      background: #ffffff;
+      cursor: pointer;
+      border-radius: 50%;
+      -webkit-appearance: none;
+      border: 3px solid #f43f5e;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      background: transparent;
+      width: 100%;
+    }
+    input[type=range]:focus {
+      outline: none;
+    }
+    .glass-effect {
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    /* タップ時のハイライト除去 */
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background-color: #0f172a;
+    }
+  </style>
+</head>
+<body class="text-slate-100 overflow-hidden font-sans">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- アイコン ---
+    const Play = ({ className }) => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M8 5v14l11-7z"/></svg>
+    );
+    const Pause = ({ className }) => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+    );
+
+    // --- 錯視図形 ---
+    const Pacman = ({ x, y, rotation, radius }) => (
+      <g transform={`translate(${x}, ${y}) rotate(${rotation})`}>
+        <path 
+          d={`M 0 0 L ${radius} 0 A ${radius} ${radius} 0 1 1 0 ${-radius} Z`} 
+          fill="#0f172a" 
+        />
+      </g>
+    );
+
+    const SubjectiveSquare = ({ centerX, centerY, size, radius }) => {
+      const half = size / 2;
+      return (
+        <g>
+          <Pacman x={centerX - half} y={centerY - half} rotation={90} radius={radius} />
+          <Pacman x={centerX + half} y={centerY - half} rotation={180} radius={radius} />
+          <Pacman x={centerX + half} y={centerY + half} rotation={270} radius={radius} />
+          <Pacman x={centerX - half} y={centerY + half} rotation={0} radius={radius} />
+        </g>
+      );
+    };
+
+    function App() {
+      const [position, setPosition] = useState('left');
+      const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+      const [intervalMs, setIntervalMs] = useState(120); 
+      const isFirstRender = useRef(true);
+
+      const playJumpSound = () => {
+        const soundUrl = "https://raw.githubusercontent.com/kono3478/sozai/main/se_jump_001.wav";
+        const audio = new Audio(soundUrl);
+        audio.volume = 0.2;
+        audio.play().catch(() => {});
+      };
+
+      const togglePosition = () => {
+        setPosition(prev => (prev === 'left' ? 'right' : 'left'));
+      };
+
+      useEffect(() => {
+        if (isFirstRender.current) {
+          isFirstRender.current = false;
+          return;
+        }
+        playJumpSound();
+      }, [position]);
+
+      useEffect(() => {
+        let timer;
+        if (isAutoPlaying) {
+          timer = setInterval(togglePosition, intervalMs);
+        }
+        return () => clearInterval(timer);
+      }, [isAutoPlaying, intervalMs]);
+
+      // SVGサイズ設定
+      const svgWidth = 400;
+      const svgHeight = 300;
+      // 以前の120, 40から80%に縮小 (96, 32)
+      const pacmanRadius = 32;
+      const squareSize = 96;
+      const centerY = 150;
+      const centerX_left = 100;
+      const centerX_right = 300;
+      const currentX = position === 'left' ? centerX_left : centerX_right;
+
+      return (
+        <div className="flex flex-col h-screen w-screen overflow-hidden">
+          
+          {/* メインエリア：極限まで大きく表示 */}
+          <div 
+            className="flex-1 w-full flex items-center justify-center p-2 bg-slate-900"
+            onClick={() => {
+              if (isAutoPlaying) setIsAutoPlaying(false);
+              togglePosition();
+            }}
+          >
+            <div className="relative w-full h-full max-w-4xl max-h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex items-center justify-center border-4 border-slate-700">
+               <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full object-contain">
+                <defs>
+                  <pattern id="dot-pattern" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                    <circle cx="8" cy="8" r="1.5" fill="#e2e8f0" />
+                  </pattern>
+                </defs>
+                <rect x="0" y="0" width="100%" height="100%" fill="url(#dot-pattern)" />
+                <SubjectiveSquare 
+                  centerX={currentX} 
+                  centerY={centerY} 
+                  size={squareSize} 
+                  radius={pacmanRadius} 
+                />
+              </svg>
+              
+              {!isAutoPlaying && (
+                <div className="absolute top-4 right-4 opacity-30 pointer-events-none">
+                   <div className="text-slate-400 text-[10px] font-bold uppercase tracking-widest border border-slate-300 px-2 py-1 rounded">Manual</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* コンパクトなコントロールパネル */}
+          <div className="glass-effect border-t border-white/10 px-6 py-4 pb-8 sm:pb-4">
+            <div className="max-w-xl mx-auto flex items-center gap-4">
+              
+              {/* 再生ボタン */}
+              <button 
+                onClick={(e) => { e.stopPropagation(); setIsAutoPlaying(!isAutoPlaying); }}
+                className={`flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-2xl transition-all active:scale-90 shadow-lg ${
+                  isAutoPlaying 
+                    ? 'bg-rose-500 text-white' 
+                    : 'bg-slate-700 text-white'
+                }`}
+              >
+                {isAutoPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+              </button>
+
+              {/* スライダーと数値 */}
+              <div className="flex-1 flex flex-col gap-1">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Speed</span>
+                  <div className="flex items-baseline gap-0.5">
+                    <span className="text-sm font-mono font-black text-rose-500">{intervalMs}</span>
+                    <span className="text-[8px] font-bold text-slate-500 uppercase">ms</span>
+                  </div>
+                </div>
+                <div className="relative flex items-center h-6">
+                  <div className="absolute w-full h-1.5 bg-slate-700 rounded-full"></div>
+                  <div 
+                    className="absolute h-1.5 bg-rose-500 rounded-full" 
+                    style={{ width: `${((intervalMs - 10) / 240) * 100}%` }}
+                  ></div>
+                  <input 
+                    type="range" 
+                    min="10" 
+                    max="250" 
+                    step="10"
+                    value={intervalMs}
+                    onChange={(e) => setIntervalMs(Number(e.target.value))}
+                    className="absolute w-full z-10 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
