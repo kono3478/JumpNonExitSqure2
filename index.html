@@ -110,6 +110,7 @@
       const [isAutoPlaying, setIsAutoPlaying] = useState(true);
       const [intervalMs, setIntervalMs] = useState(120); 
       const [isFullscreen, setIsFullscreen] = useState(false);
+      const [showControls, setShowControls] = useState(true);
       const isFirstRender = useRef(true);
 
       const playJumpSound = () => {
@@ -123,21 +124,34 @@
         setPosition(prev => (prev === 'left' ? 'right' : 'left'));
       };
 
+      // 全画面表示の切り替え（権限エラーへの対策を含む）
       const handleToggleFullscreen = (e) => {
         e.stopPropagation();
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(err => {
-            console.error(`Error attempting to enable full-screen mode: ${err.message}`);
-          });
-          setIsFullscreen(true);
+        
+        // 1. Fullscreen API が許可されている場合
+        if (document.fullscreenEnabled) {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+              // ポリシーにより拒否された場合はUIの非表示化で対応
+              setIsFullscreen(true);
+              setShowControls(false);
+            });
+          } else {
+            document.exitFullscreen();
+          }
         } else {
-          document.exitFullscreen();
-          setIsFullscreen(false);
+          // 2. Fullscreen API が利用不可な環境（iframe等）では、UIのみ隠す擬似全画面へ
+          setIsFullscreen(!isFullscreen);
+          setShowControls(isFullscreen);
         }
       };
 
       useEffect(() => {
-        const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+        const handleFsChange = () => {
+          const isFs = !!document.fullscreenElement;
+          setIsFullscreen(isFs);
+          if (isFs) setShowControls(false);
+        };
         document.addEventListener('fullscreenchange', handleFsChange);
         return () => document.removeEventListener('fullscreenchange', handleFsChange);
       }, []);
@@ -174,8 +188,14 @@
           <div 
             className="absolute inset-0 z-0 flex items-center justify-center cursor-pointer"
             onClick={() => {
-              if (isAutoPlaying) setIsAutoPlaying(false);
-              togglePosition();
+              if (showControls) {
+                // コントロール表示中は背景タップで手動ジャンプ
+                if (isAutoPlaying) setIsAutoPlaying(false);
+                togglePosition();
+              } else {
+                // 非表示中はタップでコントロールを復帰
+                setShowControls(true);
+              }
             }}
           >
              <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full object-contain">
@@ -194,17 +214,22 @@
             </svg>
           </div>
 
-          {/* 右上のモード通知 */}
+          {/* モード通知・UI復帰ガイド */}
           <div className="absolute top-6 right-6 z-10 flex flex-col items-end gap-2 pointer-events-none transition-opacity duration-500">
-             {!isAutoPlaying && (
+             {!isAutoPlaying && showControls && (
                <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest border-2 border-slate-200 px-3 py-1 rounded-full bg-white/50 backdrop-blur-sm">
                  Manual Mode
                </div>
              )}
+             {!showControls && (
+               <div className="text-slate-300 text-[8px] font-bold uppercase tracking-widest bg-black/5 px-2 py-0.5 rounded animate-pulse">
+                 Tap to show controls
+               </div>
+             )}
           </div>
 
-          {/* 下部コントロールパネル */}
-          <div className="absolute bottom-0 left-0 w-full z-20 glass-effect border-t border-slate-200/50 px-6 py-4 safe-area-bottom shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+          {/* 下部コントロールパネル (表示/非表示をアニメーション化) */}
+          <div className={`absolute bottom-0 left-0 w-full z-20 glass-effect border-t border-slate-200/50 px-6 py-4 safe-area-bottom shadow-[0_-10px_30px_rgba(0,0,0,0.05)] transition-transform duration-300 ${showControls ? 'translate-y-0' : 'translate-y-full'}`}>
             <div className="max-w-2xl mx-auto flex items-center gap-4 sm:gap-6">
               
               {/* 再生/停止ボタン */}
@@ -246,14 +271,17 @@
                 </div>
               </div>
 
-              {/* 全画面ボタン */}
-              <button 
-                onClick={handleToggleFullscreen}
-                className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-2xl bg-white border-2 border-slate-200 text-slate-600 transition-all active:scale-90 shadow-sm"
-                title="全画面表示"
-              >
-                {isFullscreen ? <Minimize className="w-6 h-6" /> : <Maximize className="w-6 h-6" />}
-              </button>
+              {/* 全画面・UI隠しボタン */}
+              <div className="flex flex-col gap-1 items-center">
+                <button 
+                  onClick={handleToggleFullscreen}
+                  className={`flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-2xl bg-white border-2 border-slate-200 text-slate-600 transition-all active:scale-90 shadow-sm ${isFullscreen ? 'border-rose-400 text-rose-500' : ''}`}
+                  title="全画面表示切り替え"
+                >
+                  {isFullscreen ? <Minimize className="w-6 h-6" /> : <Maximize className="w-6 h-6" />}
+                </button>
+                <span className="text-[8px] font-bold text-slate-400 uppercase">View</span>
+              </div>
 
             </div>
           </div>
